@@ -1,0 +1,17 @@
+# streamlit-echarts foi removido (ver src/shared/echarts_utils.py). Os
+# gráficos ECharts agora são renderizados via st.iframe (com fallback
+# automático para st.components.v1.html em versões mais antigas do
+# Streamlit), sem dependência de pacote de terceiros para a ponte
+# Python -> JS. Isso elimina o pin de versão frágil que existia aqui antes
+# e o bug de tooltips renderizando código em vez dos valores.
+streamlit>=1.38.0
+
+pandas>=2.2
+openpyxl>=3.1
+
+# Engine rápido de leitura .xlsx (usado em src/envio/data/loader.py),
+# com fallback automático para openpyxl caso não esteja instalado.
+python-calamine>=0.2
+
+# Usado na exportação de Excel filtrado do painel de Envios.
+xlsxwriter>=3.2

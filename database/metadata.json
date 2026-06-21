@@ -1,0 +1,14 @@
+{
+  "envio": {
+    "filename": "envio.xlsx",
+    "loaded_at": "2026-06-21T12:25:25"
+  },
+  "recebimento": {
+    "filename": "recebimento.xlsx",
+    "loaded_at": "2026-06-21T01:25:53"
+  },
+  "acompanhamento": {
+    "filename": "acompanhamento.xlsx",
+    "loaded_at": "2026-06-21T12:25:33"
+  }
+}

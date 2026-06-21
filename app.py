@@ -31,8 +31,8 @@ from src.shared.state import (
 )
 
 st.set_page_config(
-    page_title="Sistema de Gestão — Envio & Recebimento",
-    page_icon="📊",
+    page_title="Central das Oficinas",
+    page_icon="❄️",
     layout="wide",
     initial_sidebar_state="expanded",
 )

@@ -54,12 +54,27 @@ def _validate_columns(df: pd.DataFrame) -> None:
         )
 
 
-def _normalize(df: pd.DataFrame) -> pd.DataFrame:
+def _normalize(df: pd.DataFrame, *, dayfirst: bool = True) -> pd.DataFrame:
+    """
+    `dayfirst` precisa refletir a ORIGEM da string de data, não ser sempre
+    True:
+      - Upload de planilha (.xlsx): a coluna ENVIO chega como texto no
+        formato brasileiro "DD/MM/AAAA" (ex.: "02/01/2026" = 2 de
+        janeiro) → exige dayfirst=True para não inverter dia e mês.
+      - Leitura de volta do SQLite (`load_from_db`): o pandas grava
+        datetime64 como string ISO "AAAA-MM-DD HH:MM:SS" ao persistir
+        via `to_sql`. Reaplicar dayfirst=True nesse formato é o bug que
+        causava totais errados ao filtrar por período (identificado em
+        2026-06-21): "2026-01-02" (2 de janeiro) virava silenciosamente
+        "2026-02-01" (1 de fevereiro) sempre que dia e mês eram ambos
+        ≤12, e virava NaT nas demais combinações inválidas — embaralhando
+        boa parte da base a cada leitura do banco.
+    """
     df = df.copy()
     df.columns = [c.strip().upper() for c in df.columns]
     _validate_columns(df)
 
-    df["ENVIO"] = pd.to_datetime(df["ENVIO"], dayfirst=True, errors="coerce")
+    df["ENVIO"] = pd.to_datetime(df["ENVIO"], dayfirst=dayfirst, errors="coerce")
     df["QTD"] = pd.to_numeric(df["QTD"], errors="coerce").fillna(0)
     df["MINUTOS"] = pd.to_numeric(df["MINUTOS"], errors="coerce").fillna(0)
 
@@ -67,10 +82,20 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].astype("string").str.strip().astype("category")
 
-    df = df.dropna(subset=["ENVIO"]).reset_index(drop=True)
+    # IMPORTANTE: linhas com ENVIO inválido/ausente (ex.: "Não informado")
+    # NÃO são descartadas. Antes, um `dropna(subset=["ENVIO"])` aqui jogava
+    # fora pedidos que já tinham QTD/MINUTOS reais só por não terem data de
+    # envio preenchida — isso fazia os cards de Peças/Minutos do painel
+    # ficarem menores que o total real da planilha (bug identificado em
+    # 2026-06-21: ~463 linhas, ~376k peças e ~4,85M minutos "perdidos").
+    # Essas linhas continuam no dataset (ENVIO fica NaT) para entrar nos
+    # totais agregados; o que depende de uma data concreta (filtro de
+    # período, série diária, "hoje"/"semana") simplesmente as ignora
+    # naturalmente, pois comparações com NaT são sempre False.
+    df = df.reset_index(drop=True)
     if df.empty:
         raise PlanilhaInvalidaError(
-            "Nenhuma linha com data de ENVIO válida foi encontrada na planilha."
+            "A planilha não contém nenhuma linha de dados."
         )
     return df
 
@@ -123,7 +148,7 @@ def load_from_db() -> LoadedDataset:
     from src.shared import sql_store
 
     df_bruto = sql_store.carregar_tabela("envio")
-    df = _normalize(df_bruto)
+    df = _normalize(df_bruto, dayfirst=False)
 
     _, loaded_at = sql_store.info_tabela("envio")
     cache_key = hashlib.sha256(f"envio::{loaded_at}::{len(df)}".encode()).hexdigest()

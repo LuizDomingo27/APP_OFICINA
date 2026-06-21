@@ -100,12 +100,20 @@ def load_acompanhamento(file_bytes: bytes) -> pd.DataFrame:
     return _normalize_acompanhamento(df)
 
 
-def _normalize_acompanhamento(df: pd.DataFrame) -> pd.DataFrame:
+def _normalize_acompanhamento(df: pd.DataFrame, *, dayfirst: bool = True) -> pd.DataFrame:
     """Aplica toda a limpeza/normalização de negócio a um DataFrame já lido
     (de Excel OU de SQLite). Função pura, sem I/O e sem `st.cache_data` —
     por isso pode ser chamada tanto por `load_acompanhamento` (upload)
     quanto por `load_from_db` (leitura do banco) e por scripts de seed
     fora do Streamlit.
+
+    `dayfirst` se aplica só à coluna ENVIO, que chega como TEXTO em
+    formato brasileiro "DD/MM/AAAA" no upload (exige dayfirst=True), mas
+    como string ISO "AAAA-MM-DD" depois de um round-trip pelo SQLite
+    (exige dayfirst=False — ver o mesmo bug já corrigido em
+    `src/envio/data/loader.py`: reaplicar dayfirst=True sobre uma data
+    ISO inverte dia e mês sempre que ambos são ≤12). DEADLINE/RECEBIMENTO
+    não precisam do parâmetro: já chegam como datetime nativo do Excel.
     """
     df = df.copy()
 
@@ -147,7 +155,7 @@ def _normalize_acompanhamento(df: pd.DataFrame) -> pd.DataFrame:
     df['DEADLINE'] = df['DEADLINE'].apply(replace_year_2025)
 
     # 3. Tratamento da coluna ENVIO (data primária para filtros)
-    df['ENVIO'] = pd.to_datetime(df['ENVIO'], errors='coerce')
+    df['ENVIO'] = pd.to_datetime(df['ENVIO'], dayfirst=dayfirst, errors='coerce')
     df = df.dropna(subset=['ENVIO']).reset_index(drop=True)
 
     if df.empty:
@@ -210,4 +218,4 @@ def load_from_db() -> pd.DataFrame:
     from src.shared import sql_store
 
     df_bruto = sql_store.carregar_tabela("acompanhamento")
-    return _normalize_acompanhamento(df_bruto)
+    return _normalize_acompanhamento(df_bruto, dayfirst=False)

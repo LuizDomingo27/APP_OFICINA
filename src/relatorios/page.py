@@ -145,11 +145,20 @@ def _build_workshop_summary(df_envio: pd.DataFrame, df_receb: pd.DataFrame) -> p
     envio_g = df_env.groupby("OFICINA_NORM", as_index=False)["QTD"].sum().rename(columns={"QTD": "ENVIADAS", "OFICINA_NORM": "OFICINA"})
     # Agrupa Recebimento por Oficina Normalizada
     receb_g = df_rec.groupby("OFICINA_NORM", as_index=False)["REAL CORTADO"].sum().rename(columns={"REAL CORTADO": "RECEBIDAS", "OFICINA_NORM": "OFICINA"})
-    
+
+    # Agrupa OM por Oficina Normalizada (se existir)
+    if "OM" in df_env.columns:
+        om_g = df_env.groupby("OFICINA_NORM", as_index=False)["OM"].sum().rename(columns={"OM": "TOTAL_OM", "OFICINA_NORM": "OFICINA"})
+    else:
+        om_g = pd.DataFrame(columns=["OFICINA", "TOTAL_OM"])
+
     # Merge
     merged = pd.merge(envio_g, receb_g, on="OFICINA", how="outer").fillna(0)
+    # Merge OM totals
+    merged = pd.merge(merged, om_g, on="OFICINA", how="left").fillna(0)
     merged["ENVIADAS"] = merged["ENVIADAS"].astype(int)
     merged["RECEBIDAS"] = merged["RECEBIDAS"].astype(int)
+    merged["TOTAL_OM"] = merged["TOTAL_OM"].astype(int)
     merged["SALDO_PENDENTE"] = merged["ENVIADAS"] - merged["RECEBIDAS"]
     merged["TAXA_RETORNO"] = (merged["RECEBIDAS"] / merged["ENVIADAS"] * 100).where(merged["ENVIADAS"] > 0, 0.0)
     
@@ -707,6 +716,7 @@ def render_relatorios_page(envio_dataset: Any, recebimento_df: pd.DataFrame) -> 
         '<th>Oficina</th>'
         '<th class="num">Enviadas</th>'
         '<th class="num">Recebidas</th>'
+        #'<th class="num">Total OM</th>'
         '<th class="num">Saldo</th>'
         '<th class="num">Retorno</th>'
         '</tr>'
@@ -724,6 +734,7 @@ def render_relatorios_page(envio_dataset: Any, recebimento_df: pd.DataFrame) -> 
             f'<td><strong>{row["OFICINA"]}</strong></td>'
             f'<td class="num">{env_val}</td>'
             f'<td class="num">{rec_val}</td>'
+            #'<td class="num">{int(row["TOTAL_OM"]) if "TOTAL_OM" in row else 0}</td>'
             f'<td class="num" style="color:{color_val}; font-weight:bold;">{saldo_val}</td>'
             f'<td class="num"><strong>{row["TAXA_RETORNO"]:.1f}%</strong></td>'
             f'</tr>'
@@ -753,7 +764,7 @@ def render_relatorios_page(envio_dataset: Any, recebimento_df: pd.DataFrame) -> 
     st.markdown(
         """
         <div style="text-align:center; font-size:12px; color:#A0C4B3; padding:12px;">
-            Relatório de Gestão Executiva — APP Analise Oficina
+            Relatório — APP Analise Oficina
         </div>
         """,
         unsafe_allow_html=True

@@ -9,10 +9,15 @@ por selecionar um arquivo no uploader: é preciso clicar explicitamente em
 "💾 Salvar e Substituir" depois que o conteúdo for validado. Isso evita que
 uma base de produção seja sobrescrita por engano.
 
-As três bases (envio, recebimento, acompanhamento) já estão migradas para
+As bases de Envio, Recebimento e Acompanhamento já estão migradas para
 SQLite (`database/app.db`, via `src/shared/sql_store.py`). A versão
 anterior de cada base é sempre guardada em backup do `.db` (ver
 `sql_store._backup_arquivo_db`) antes de qualquer substituição.
+
+A base de Detalhe do Recebimento (planilha STATUS.xlsx, tabela
+`detalhe_recebimento`) segue exatamente o mesmo mecanismo, mas é
+OPCIONAL: sua ausência não bloqueia o acesso aos demais painéis (ver
+`bases_prontas()` em `src/shared/state.py`).
 """
 
 from __future__ import annotations
@@ -30,6 +35,12 @@ from src.acompanhamento.loader import (
     select_canonical_columns,
     load_from_db as load_acompanhamento_from_db,
 )
+from src.detalhe_recebimento.data_loader import (
+    _normalize_raw as _normalize_raw_detalhe,
+    DataLoadError as DetalheRecebimentoLoadError,
+    load_from_db as load_detalhe_recebimento_from_db,
+)
+from src.detalhe_recebimento.config import SQL_TABLE_NAME as DETALHE_RECEBIMENTO_TABLE
 from src.shared import sql_store
 from src.shared.state import VIEW_HOME, ir_para
 
@@ -203,6 +214,62 @@ def _secao_base_acompanhamento() -> None:
     st.divider()
 
 
+def _secao_base_detalhe_recebimento() -> None:
+    """Seção "Detalhe do Recebimento" (planilha STATUS.xlsx) — SQLite
+    (`database/app.db`, tabela `detalhe_recebimento`).
+
+    Diferente das três bases originais, esta é OPCIONAL: sua ausência não
+    bloqueia o acesso aos demais painéis (ver `bases_prontas()` em
+    `src/shared/state.py`) — só o próprio painel "🧾 Detalhe do Recebimento"
+    fica indisponível até o primeiro upload.
+    """
+    titulo = "Base de Detalhe do Recebimento (STATUS)"
+    st.markdown(f"#### {titulo}")
+    st.caption("Colunas obrigatórias: OFICINA, ENVIO, QTD, MINUTOS, MP, RECEBIMENTO")
+    st.caption("🧪 Esta base já está migrada para SQLite (`database/app.db`).")
+
+    _cartao_base_atual(*sql_store.info_tabela(DETALHE_RECEBIMENTO_TABLE))
+
+    arquivo = st.file_uploader(
+        f"Selecionar nova planilha — {titulo}",
+        type=["xlsx"],
+        key="uploader_manage_detalhe_recebimento_sqlite",
+    )
+
+    if arquivo is None:
+        st.divider()
+        return
+
+    try:
+        df_bruto = pd.read_excel(BytesIO(arquivo.getvalue()))
+        df_limpo = _normalize_raw_detalhe(df_bruto, dayfirst=True)
+    except DetalheRecebimentoLoadError as exc:
+        st.error(f"⚠️ Planilha inválida: {exc}")
+        st.divider()
+        return
+    except Exception as exc:
+        st.error(f"Não foi possível abrir a planilha: {exc}")
+        st.divider()
+        return
+
+    st.success(f"✅ Planilha válida — {len(df_limpo):,} linhas. Nada foi alterado ainda.".replace(",", "."))
+
+    if st.button(f"💾 Salvar e Substituir — {titulo}", key="btn_salvar_detalhe_recebimento_sqlite", type="primary"):
+        sql_store.substituir_tabela(
+            DETALHE_RECEBIMENTO_TABLE, df_limpo, indices=["ENVIO", "MP", "OFICINA", "RECEBIMENTO"]
+        )
+        sql_store.registrar_metadata(DETALHE_RECEBIMENTO_TABLE, arquivo.name)
+        load_detalhe_recebimento_from_db.clear()  # invalida o cache: próxima leitura já reflete os dados novos
+        st.session_state["detalhe_recebimento_df"] = load_detalhe_recebimento_from_db()
+        st.success(
+            "Base de Detalhe do Recebimento substituída com sucesso (SQLite)! "
+            "A versão anterior do banco foi guardada em backup."
+        )
+        st.rerun()
+
+    st.divider()
+
+
 def render_gerenciar_bases() -> None:
     st.title("⚙️ Atualizar Bases")
     st.write(
@@ -216,6 +283,7 @@ def render_gerenciar_bases() -> None:
     _secao_base_envio()
     _secao_base_recebimento()
     _secao_base_acompanhamento()
+    _secao_base_detalhe_recebimento()
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("⬅️ Voltar"):

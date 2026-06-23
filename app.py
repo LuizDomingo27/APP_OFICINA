@@ -16,6 +16,7 @@ from src.envio.page import render_envio_page
 from src.recebimento.page import render_recebimento_page
 from src.relatorios.page import render_relatorios_page
 from src.acompanhamento.page import render_acompanhamento_page
+from src.detalhe_recebimento.page import render_detalhe_recebimento_page
 from src.shared.home import render_home
 from src.shared.manage_bases import render_gerenciar_bases
 from src.shared.state import (
@@ -24,6 +25,7 @@ from src.shared.state import (
     VIEW_RECEBIMENTO,
     VIEW_RELATORIOS,
     VIEW_ACOMPANHAMENTO,
+    VIEW_DETALHE_RECEBIMENTO,
     VIEW_GERENCIAR_BASES,
     bases_prontas,
     init_state,
@@ -113,6 +115,7 @@ if bases_prontas():
             "📤 Painel de Envios": VIEW_ENVIO,
             "📦 Painel de Recebimento": VIEW_RECEBIMENTO,
             "📋 Acompanhamento Oficina": VIEW_ACOMPANHAMENTO,
+            "🧾 Detalhe do Recebimento": VIEW_DETALHE_RECEBIMENTO,
             "📊 Relatório Executivo": VIEW_RELATORIOS,
         }
 
@@ -151,6 +154,8 @@ elif view == VIEW_RECEBIMENTO:
     render_recebimento_page(st.session_state["recebimento_df"])
 elif view == VIEW_ACOMPANHAMENTO:
     render_acompanhamento_page(st.session_state["acompanhamento_df"])
+elif view == VIEW_DETALHE_RECEBIMENTO:
+    render_detalhe_recebimento_page(st.session_state.get("detalhe_recebimento_df"))
 elif view == VIEW_RELATORIOS:
     render_relatorios_page(st.session_state["envio_dataset"], st.session_state["recebimento_df"])
 elif view == VIEW_GERENCIAR_BASES:

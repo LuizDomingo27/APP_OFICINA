@@ -22,6 +22,7 @@ VIEW_ENVIO = "envio"
 VIEW_RECEBIMENTO = "recebimento"
 VIEW_RELATORIOS = "relatorios"
 VIEW_ACOMPANHAMENTO = "acompanhamento"
+VIEW_DETALHE_RECEBIMENTO = "detalhe_recebimento"
 VIEW_GERENCIAR_BASES = "gerenciar_bases"
 
 _STATE_KEYS = (
@@ -29,6 +30,7 @@ _STATE_KEYS = (
     "envio_dataset",
     "recebimento_df",
     "acompanhamento_df",
+    "detalhe_recebimento_df",
 )
 
 
@@ -63,6 +65,17 @@ def _carregar_bases_existentes_do_disco() -> None:
         except Exception:
             pass
 
+    # Base "Detalhe do Recebimento" (planilha STATUS.xlsx) — OPCIONAL: não
+    # entra em `bases_prontas()` nem bloqueia a tela inicial. Ausência dela
+    # apenas faz a própria página do painel orientar o upload pela tela
+    # "⚙️ Atualizar Bases", sem afetar Envio/Recebimento/Acompanhamento.
+    if st.session_state.get("detalhe_recebimento_df") is None and sql_store.existe_tabela("detalhe_recebimento"):
+        try:
+            from src.detalhe_recebimento.data_loader import load_from_db as load_detalhe_from_db
+            st.session_state["detalhe_recebimento_df"] = load_detalhe_from_db()
+        except Exception:
+            pass
+
 
 def init_state() -> None:
     """Garante que as chaves de estado existem e tenta carregar bases do disco.
@@ -79,6 +92,7 @@ def init_state() -> None:
     st.session_state.setdefault("envio_dataset", None)
     st.session_state.setdefault("recebimento_df", None)
     st.session_state.setdefault("acompanhamento_df", None)
+    st.session_state.setdefault("detalhe_recebimento_df", None)
     st.session_state.setdefault("navigation_radio", "📤 Painel de Envios")
 
     _carregar_bases_existentes_do_disco()

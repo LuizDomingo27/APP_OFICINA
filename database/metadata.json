@@ -10,5 +10,9 @@
   "acompanhamento": {
     "filename": "acompanhamento.xlsx",
     "loaded_at": "2026-06-21T23:11:55"
+  },
+  "detalhe_recebimento": {
+    "filename": "status.xlsx",
+    "loaded_at": "2026-06-23T08:08:47"
   }
 }

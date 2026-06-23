@@ -51,7 +51,7 @@ DB_PATH = BASE_DIR / "app.db"
 BACKUP_DIR = BASE_DIR / "_backup"
 METADATA_PATH = BASE_DIR / "metadata.json"  # mesmo arquivo usado por database.py
 
-_MAX_BACKUPS = 5  # quantos backups antigos do .db manter
+_MAX_BACKUPS = 2  # quantos backups antigos do .db manter
 
 
 # ---------------------------------------------------------------------------

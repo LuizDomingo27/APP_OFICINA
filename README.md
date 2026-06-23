@@ -24,8 +24,13 @@ streamlit run app.py
 4. Para substituir uma base já carregada (planilha nova de produção), use a
    tela **"⚙️ Atualizar Bases"** — é o único lugar onde uma substituição
    de verdade acontece, e só depois de clicar em "Salvar e Substituir".
+5. A base de **Detalhe do Recebimento** (planilha STATUS.xlsx) é
+   **opcional** e não faz parte do upload inicial: ela é enviada a
+   qualquer momento pela própria tela "⚙️ Atualizar Bases", liberando o
+   painel **"🧾 Detalhe do Recebimento"** na navegação.
 
-**Persistência:** as 3 bases ficam salvas em `database/app.db` (SQLite,
+**Persistência:** as 3 bases obrigatórias (+ a base opcional de Detalhe do
+Recebimento, quando enviada) ficam salvas em `database/app.db` (SQLite,
 ver `src/shared/sql_store.py`). Ao reabrir o app numa sessão nova, as
 bases já carregam automaticamente — sem precisar reenviar os `.xlsx`.
 Antes de qualquer substituição, o `.db` inteiro é copiado para
@@ -34,13 +39,13 @@ Antes de qualquer substituição, o `.db` inteiro é copiado para
 ## Arquitetura
 
 ```
-app.py                      → entrypoint / router (home | envio | recebimento | acompanhamento | gerenciar_bases)
+app.py                      → entrypoint / router (home | envio | recebimento | acompanhamento | detalhe_recebimento | gerenciar_bases)
 src/
 ├── shared/
 │   ├── state.py             → estado de sessão (view atual, bases carregadas, reset)
 │   ├── home.py               → tela inicial: upload + validação + cards de navegação
 │   ├── manage_bases.py       → tela "⚙️ Atualizar Bases" (substituição explícita de uma base)
-│   ├── sql_store.py          → persistência em SQLite (database/app.db) — usada pelas 3 bases
+│   ├── sql_store.py          → persistência em SQLite (database/app.db) — usada por todas as bases
 │   └── database.py           → legado (.xlsx); hoje só `info_base()` ainda é usada (metadata compartilhada)
 ├── envio/                    → camada do projeto APP_ENVIO
 │   ├── config/                 settings.py, theme.py
@@ -55,24 +60,64 @@ src/
 │   ├── metrics.py / charts.py
 │   ├── ui/                      cards.py, filters.py, goal.py
 │   └── page.py                  ponto de entrada da página (chamado pelo router)
-└── acompanhamento/            → painel de acompanhamento de oficina (filtro "Costura")
-    ├── loader.py                normalização + `load_from_db()` do SQLite
-    └── page.py                  ponto de entrada da página (chamado pelo router)
+├── acompanhamento/            → painel de acompanhamento de oficina (filtro "Costura")
+│   ├── loader.py                normalização + `load_from_db()` do SQLite
+│   └── page.py                  ponto de entrada da página (chamado pelo router)
+└── detalhe_recebimento/       → painel "🧾 Detalhe do Recebimento" (planilha STATUS.xlsx) — base OPCIONAL
+    ├── config.py                 colunas + paleta de cores
+    ├── data_loader.py            normalização + `load_from_db()` do SQLite (tabela `detalhe_recebimento`)
+    ├── metrics.py                 totais por operação / detalhamento por Operação+MP+Oficina
+    ├── pdf_export.py              geração do PDF executivo (reportlab)
+    ├── ui/                        cards.py, filters.py
+    └── page.py                    ponto de entrada da página (chamado pelo router)
 ```
 
 ## Migração de Excel para SQLite
 
-As 3 bases foram migradas de planilhas `.xlsx` em disco para SQLite
-(`database/app.db`). Os `.xlsx` antigos (`database/envio.xlsx`,
+As 3 bases originais foram migradas de planilhas `.xlsx` em disco para
+SQLite (`database/app.db`). Os `.xlsx` antigos (`database/envio.xlsx`,
 `database/recebimento.xlsx`, `database/acompanhamento.xlsx`) continuam no
 disco como cópia de segurança, mas não são mais lidos pelo app — só pelos
 scripts de migração única (`scripts/seed_envio.py`,
 `scripts/seed_recebimento.py`, `scripts/seed_acompanhamento.py`), que já
 foram executados e não precisam rodar de novo em condições normais.
 
+A base de **Detalhe do Recebimento** (planilha STATUS.xlsx) já nasceu
+direto em SQLite (tabela `detalhe_recebimento`) — não existe versão
+legada em `.xlsx` fixo. O script `scripts/seed_detalhe_recebimento.py`
+existe só como atalho de linha de comando para quem preferir popular a
+tabela sem passar pela tela "⚙️ Atualizar Bases":
+
+```bash
+python scripts/seed_detalhe_recebimento.py /caminho/para/STATUS.xlsx
+```
+
 Detalhes de implementação (estratégia de troca atômica de tabela, cuidado
 com WAL no backup, etc.) estão documentados nos comentários de
 `src/shared/sql_store.py`.
+
+## Painel "🧾 Detalhe do Recebimento"
+
+Painel dedicado à planilha STATUS.xlsx — a coluna `RECEBIMENTO` traz o
+status/operação de cada ordem em aberto (ex.: "Agua. Reposição",
+"Coletando datas", "Procurando" etc.).
+
+- **Cards de indicadores**: total de peças e minutos por operação (um
+  card por status), além de um resumo geral do período filtrado.
+- **Tabela de detalhamento**: mesmos totais agrupados por
+  Operação + MP + Oficina, no mesmo layout (`.custom-table`) usado nos
+  demais painéis.
+- **Exportação em PDF**: botão abaixo da tabela gera um PDF executivo
+  (`src/detalhe_recebimento/pdf_export.py`, via `reportlab`) com o mesmo
+  padrão de cor/tabela do app — cabeçalho repetido em todas as páginas,
+  linha de total e paginação automática.
+- **Filtros**: período com base na coluna `ENVIO` (conforme pedido), e
+  filtros adicionais por Operação, MP e Oficina, seguindo o mesmo padrão
+  de filtros das demais telas.
+
+Essa base é a única **opcional** do app: sem ela, os outros 4 painéis
+funcionam normalmente, e o próprio painel exibe uma orientação para
+enviar a planilha pela tela "⚙️ Atualizar Bases" em vez de quebrar.
 
 ## O que mudou em relação aos projetos originais
 

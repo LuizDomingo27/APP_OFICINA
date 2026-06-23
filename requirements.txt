@@ -15,3 +15,7 @@ python-calamine>=0.2
 
 # Usado na exportação de Excel filtrado do painel de Envios.
 xlsxwriter>=3.2
+
+# Usado na geração do PDF executivo do painel "Detalhe do Recebimento"
+# (src/detalhe_recebimento/pdf_export.py).
+reportlab>=4.0

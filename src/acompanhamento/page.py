@@ -743,76 +743,6 @@ def render_acompanhamento_page(df_full: pd.DataFrame) -> None:
             df_g = df.groupby('DIA')[['PECAS', 'MINUTOS']].sum().reset_index().sort_values(by='DIA', ascending=False)
             render_custom_table(df_g, num_cols=['PECAS', 'MINUTOS'], date_cols=['DIA'])
 
-        st.divider()
-
-        # Tabela detalhada por semana (Semana / Ordem / MP / Peças / Minutos)
-        _chart_card_header("Detalhamento por Semana")
-        df_semana_detalhe = (
-            df.groupby(['SEMANA_STR', 'OM', 'MP'])[['PECAS', 'MINUTOS']]
-            .sum()
-            .reset_index()
-            .sort_values(by=['SEMANA_STR', 'OM', 'MP'], ascending=[False, True, True])
-        )
-        df_semana_detalhe = df_semana_detalhe.rename(columns={'SEMANA_STR': 'SEMANA', 'OM': 'ORDEM'})
-        df_semana_detalhe = df_semana_detalhe[['SEMANA', 'ORDEM', 'MP', 'PECAS', 'MINUTOS']]
-        render_custom_table(df_semana_detalhe, num_cols=['PECAS', 'MINUTOS'], date_cols=[])
-
-        st.divider()
-
-        # Tabelas de Recebimento (apenas registros com data válida na coluna Recebimento)
-        _chart_card_header("Recebimento por OM / MP (por Data de Recebimento)")
-        st.caption(
-            "Considera apenas os registros (dentro dos filtros aplicados) que possuem "
-            "uma data válida na coluna Recebimento. Textos de status como 'À programar' "
-            "ou 'Almoxarifado' são ignorados nesta visão."
-        )
-        df_receb = df[df['RECEBIMENTO'].notna()].copy()
-
-        if df_receb.empty:
-            st.warning(
-                "⚠️ Nenhum registro com data de Recebimento válida foi encontrado "
-                "para os filtros selecionados."
-            )
-        else:
-            df_g_receb = (
-                df_receb.assign(RECEBIMENTO=df_receb['RECEBIMENTO'].dt.date)
-                .groupby(['RECEBIMENTO', 'OM', 'MP'])[['PECAS', 'MINUTOS']]
-                .sum()
-                .reset_index()
-                .sort_values(by=['RECEBIMENTO', 'OM', 'MP'], ascending=[False, True, True])
-            )
-            df_g_receb = df_g_receb[['RECEBIMENTO', 'OM', 'MP', 'PECAS', 'MINUTOS']]
-            render_custom_table(df_g_receb, num_cols=['PECAS', 'MINUTOS'], date_cols=['RECEBIMENTO'])
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Resumo agrupado por semana de Recebimento (visão consolidada, sem
-            # quebra por OM/MP — total de peças e minutos recebidos em cada semana).
-            _chart_card_header(" Resumo Semanal de Recebimento")
-            semana_receb = df_receb['RECEBIMENTO'].dt.isocalendar()
-            df_resumo_semana = (
-                df_receb.assign(
-                    SEMANA_STR=(
-                        semana_receb['year'].astype(str)
-                        + "-W"
-                        + semana_receb['week'].astype(int).astype(str).str.zfill(2)
-                    )
-                )
-                .groupby('SEMANA_STR')[['PECAS', 'MINUTOS']]
-                .sum()
-                .reset_index()
-                .sort_values(by='SEMANA_STR', ascending=False)
-            )
-            df_resumo_semana = df_resumo_semana.rename(columns={'SEMANA_STR': 'SEMANA'})
-            render_custom_table(df_resumo_semana, num_cols=['PECAS', 'MINUTOS'], date_cols=[])
-
-        st.divider()
-
-        # Detalhamento dos dados brutos (linhas individuais)
-        _chart_card_header(" Dados Detalhados")
-        columns_to_show = ['ENVIO', 'DEADLINE', 'OM', 'MP', 'OFICINA', 'DEPARTAMENTO', 'PECAS', 'MINUTOS']
-        df_table = df[columns_to_show].head(400)
-        render_custom_table(df_table, num_cols=['PECAS', 'MINUTOS'], date_cols=['ENVIO', 'DEADLINE'])
 
     elif aba == tab_receb:
         st.markdown("### Visão por Data de Recebimento")
@@ -900,7 +830,40 @@ def render_acompanhamento_page(df_full: pd.DataFrame) -> None:
                 num_cols=['TOTAL PEÇAS', 'TOTAL MINUTOS', 'TOTAL DE ORDENS'],
                 date_cols=['DATA'],
             )
-            
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Tabela consolidada por semana de previsão de Recebimento
+            _chart_card_header(" Consolidado por Semana de Recebimento")
+            semana_iso = df_receb['RECEBIMENTO'].dt.isocalendar()
+            df_receb_semana = (
+                df_receb.assign(
+                    SEMANA=(
+                        semana_iso['year'].astype(str)
+                        + "-W"
+                        + semana_iso['week'].astype(int).astype(str).str.zfill(2)
+                    )
+                )
+                .groupby('SEMANA')
+                .agg(
+                    PECAS=('PECAS', 'sum'),
+                    MINUTOS=('MINUTOS', 'sum'),
+                    ORDENS=('OM', 'nunique'),
+                )
+                .reset_index()
+                .sort_values(by='SEMANA', ascending=False)
+            )
+            df_receb_semana = df_receb_semana.rename(columns={
+                'PECAS': 'TOTAL PEÇAS',
+                'MINUTOS': 'TOTAL MINUTOS',
+                'ORDENS': 'TOTAL DE ORDENS',
+            })
+            render_custom_table(
+                df_receb_semana,
+                num_cols=['TOTAL PEÇAS', 'TOTAL MINUTOS', 'TOTAL DE ORDENS'],
+                date_cols=[],
+            )
+
 
     st.markdown("<br><br>", unsafe_allow_html=True)
     
